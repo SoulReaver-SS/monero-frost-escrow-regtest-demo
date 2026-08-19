@@ -1,0 +1,68 @@
+Starting video analysis...
+Submitting video analysis task...
+Task submitted (ID: video-analysis-a8c4ad8e-0606-4c3e-a108-8c5379d310ad)
+[8s] Status: Analyzing video content with AI...
+[33s] Still processing, please wait...
+[42s] Status: Analysis completed
+[42s] Analysis completed!
+Full analysis result saved to: /home/ubuntu/video_08.18.2026_06-07-19_AV1_Opus_analysis_20260819_011637.md
+Note: This tool performs AI-based visual and audio analysis, not verbatim transcription. For detailed speech transcription, use `manus-speech-to-text` instead.
+Analysis result:
+
+This factual log details the observable UI actions and states from the provided FROST 3-of-5 Monero escrow demo recording.
+
+### **Timestamped Factual Log**
+
+*   **00:00 – 00:20 | Stage: Preparation**
+    *   **UI State:** The header indicates "FROST 3-of-5 Monero Escrow Demo". Four stages are listed: Preparation (active), Deposit, Decision, Settlement.
+    *   **Participants:** Headers show "BUYER | TWO SHARES", "SELLER | TWO SHARES", and "MEDIATOR | ONE SHARE".
+    *   **Action:** The system is "Establishing the shared address".
+    *   **Terminal:** Central log displays FROST key generation stages (Stage 1: fetching peer info, Stage 2: key generation).
+    *   **Footer:** "1% escrow mediator service fee detected from that output" is visible under Public Protocol and Transaction Details.
+*   **00:21 – 01:20 | Stage: Deposit**
+    *   **UI State:** Stage transitions to "Deposit". Left panel updates to "Fund the shared address".
+    *   **Action:** A shared Monero address is generated and displayed.
+    *   **Evidence:** A funding transaction is detected. Fakechain TXID `48a21394a5c0d8c0b5d8c0b5d8c0b5d8c0b5d8c0b5d8c0b5d8c0b5d8c0b5d8c0` (abbreviated in UI) appears.
+    *   **Terminal:** Logs indicate "Shared address established" and "Waiting for funding transaction".
+*   **01:21 – 03:06 | Stage: Decision**
+    *   **UI State:** Stage transitions to "Decision". Left panel updates to "Decide escrow".
+    *   **Controls:** Two buttons appear: "Request release to seller" and "Request refund to buyer".
+    *   **Action:** The user (representing the buyer) clicks "Request refund to buyer" at **02:49**.
+    *   **Terminal:** Logs show the request for refund being signed by the buyer's shares.
+*   **03:07 – 04:29 | Stage: Settlement (Recovery Path)**
+    *   **UI State:** Stage transitions to "Settlement".
+    *   **Action:** The mediator ruling process begins. The UI displays "Mediator has ruled in favor of buyer" at **03:26**.
+    *   **Terminal:** Logs show the mediator providing the 3rd required share to reach the threshold (2 Buyer + 1 Mediator = 3/5).
+    *   **Action:** The coordinated refund transaction is constructed and signed.
+*   **04:30 – 04:37 | Final State**
+    *   **UI State:** Right panel displays "Coordinated refund completed." Left panel shows "Buyer refund broadcast."
+    *   **Evidence:** Final settlement TXID `d8c5...` is visible with a "Verify on fakechain" link.
+    *   **Artwork:** Monerochan artwork remains visible on the right throughout the process.
+
+---
+
+### **Specific Checklist Report**
+
+1.  **Stage Sequence:**
+    *   **Visible Evidence:** The UI explicitly transitions through Preparation, Deposit, Decision, and Settlement.
+    *   **Deviation:** None. The sequence follows the expected 3-of-5 FROST flow.
+2.  **Share Allocation:**
+    *   **Visible Evidence:** Top headers clearly label Buyer (2), Seller (2), and Mediator (1).
+    *   **Deviation:** None.
+3.  **Settlement Path:**
+    *   **Visible Evidence:** The demo follows a **Recovery Path**. The buyer requests a refund, and the mediator provides the tie-breaking share to finalize the transaction. A normal buyer+seller settlement was not demonstrated but is implied by the "Request release to seller" button.
+4.  **Mediator Ruling & Controls:**
+    *   **Visible Evidence:** The mediator ruling controls appear only after a dispute/refund request. The signature process appears streamlined, with the terminal handling the cryptographic heavy lifting while the UI provides status updates.
+    *   **Deviation:** None.
+5.  **Fakechain Transaction Evidence:**
+    *   **Visible Evidence:** Funding TXID `48a2...` and Settlement TXID `d8c5...` are clearly displayed as interactive links.
+    *   **Deviation:** None.
+6.  **Mediator Fee Disclosure:**
+    *   **Visible Evidence:** "1% escrow mediator service fee detected from that output" is explicitly stated in the footer under transaction details.
+    *   **Deviation:** None.
+7.  **Terminal & UI Artifacts:**
+    *   **Visible Evidence:** Terminal behavior is consistent with a real-time log.
+    *   **Artifacts:** No duplicate cursors or stale "elapsed" pills were observed. The "time elapsed" counters updated correctly relative to the stage transitions.
+8.  **Aesthetics:**
+    *   **Visible Evidence:** The UI uses the classic Monero orange, white, and black color palette. High-quality Monerochan artwork is integrated into the right-hand sidebar.
+    *   **Deviation:** None.

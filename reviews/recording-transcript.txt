@@ -1,0 +1,29 @@
+Starting Speech-to-Text conversion...
+Video file detected: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus.mp4, file size: 198.69 MB
+File size exceeds limit, converting to audio (64kbps)...
+Converting video to audio (bitrate: 64k)...
+Audio conversion completed. Saved to: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658.mp3
+Transcribing audio file: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658.mp3, file size: 2.12 MB
+Transcription may take some time depending on file size and audio length...
+Transcription completed successfully!
+
+TRANSCRIPTION RESULT:
+Total Duration: 0.0 seconds
+Language: en
+Text content:
+
+Complete transcription result saved to: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658_transcription_20260819_011710.json
+Plain text transcription saved to: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658_transcription_20260819_011710.txt
+
+The video has been automatically converted to an audio file and saved at /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658.mp3
+[2J[H[3Jmanus-speech-to-text /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus.mp4
+Starting Speech-to-Text conversion...
+Video file detected: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus.mp4, file size: 198.69 MB
+File size exceeds limit, converting to audio (64kbps)...
+Transcribing audio file: /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658.mp3, file size: 2.12 MB
+Transcription may take some time depending on file size and audio length...
+
+The video has been automatically converted to an audio file and saved at /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658.mp3
+
+Completed transcription, JSON saved to /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658_transcription_20260819_011710.json
+Plain text transcription saved to /home/ubuntu/upload/08.18.2026_06-07-19_AV1_Opus_converted_20260819_011658_transcription_20260819_011710.txt

@@ -1,0 +1,544 @@
+import { setupBlocksBufferGenerator, ViewPair, handleConnectionStatusChanges, processScanResult, writeCacheToFile, sleep, findTipIndex, readWriteConnectionStatusFile, applyWalletScanProgress, } from "../../api";
+import {} from "./scanLoop";
+import { makeWorkItem } from "./scanLoop";
+import { cullTooLargeScanHeight, getNonHaltedWallets, getPathPrefix, openScanSettingsFile, SCAN_SETTINGS_STORE_NAME_DEFAULT, walletSettingsPlusKeys, } from "../../api";
+import { findRange, initScanCacheFile, lastRange, makeCacheRangeForHeight, mergeRanges, } from "./scanCache";
+import { sendToCpuWorker } from "../worker-mains/cpubound-main";
+import { log } from "../../io/logging";
+/**
+ * this depends only on ScanSettings.json start_height and wallet caches scanned_ranges
+ * side effect: will init wallet cache file if it does not exist
+ * side effect: will merge scan ranges + add subaddreses to existing cache files
+ * @param scan_settings_path
+ */
+export async function findWorkToBeDone(scan_settings_path = SCAN_SETTINGS_STORE_NAME_DEFAULT, pathPrefix) {
+    const parts = scan_settings_path.split("/");
+    const basename = parts.pop();
+    const dir = parts.join("/");
+    const prefix = dir ? `${dir}/` : "";
+    const scan_settings = await openScanSettingsFile(scan_settings_path);
+    if (!scan_settings)
+        return false;
+    const total_start_height = await cullTooLargeScanHeight(scan_settings.node_url, scan_settings_path);
+    const wallets = getNonHaltedWallets(scan_settings);
+    if (!wallets.length)
+        return false;
+    const potential_anchor_ranges = [];
+    const wallet_caches = [];
+    const wallet_configs = [];
+    let wallet_without_anchor_at_start_height = false;
+    for (const wallet of wallets) {
+        const walletSettingsWithKeys = await walletSettingsPlusKeys({
+            ...wallet,
+            node_url: scan_settings.node_url,
+            start_height: total_start_height,
+        });
+        const newWalletViewPair = await ViewPair.create(wallet.primary_address, walletSettingsWithKeys.secret_view_key, wallet.subaddress_index, walletSettingsWithKeys.node_url);
+        const walletCache = await initScanCacheFile(newWalletViewPair, scan_settings_path, pathPrefix ?? prefix);
+        if (!walletCache)
+            throw new Error("wallet cache not found and new one could not be created for " +
+                wallet.primary_address);
+        wallet_caches.push(walletCache);
+        wallet_configs.push({
+            primary_address: wallet.primary_address,
+            secret_view_key: walletSettingsWithKeys.secret_view_key,
+            secret_spend_key: walletSettingsWithKeys.secret_spend_key,
+            subaddress_index: wallet.subaddress_index || 0,
+            cache: walletCache,
+        });
+        const range = findRange(walletCache.scanned_ranges, total_start_height);
+        if (!range) {
+            wallet_without_anchor_at_start_height = true;
+            continue;
+        }
+        potential_anchor_ranges.push(range);
+    }
+    //go over all wallets and make sure they have an anchor range at start_height
+    if (wallet_without_anchor_at_start_height) {
+        const range_at_start = await makeCacheRangeForHeight(total_start_height, scan_settings.node_url);
+        potential_anchor_ranges.push(range_at_start);
+        for (const wallet_cache of wallet_caches) {
+            // only add the range to wallets that don't already have one
+            if (!findRange(wallet_cache.scanned_ranges, total_start_height)) {
+                log("findWorkToBeDone", "inserting range_at_start");
+                wallet_cache.scanned_ranges.push(range_at_start);
+                wallet_cache.scanned_ranges = mergeRanges(wallet_cache.scanned_ranges);
+            }
+        }
+    }
+    const anchor_range = potential_anchor_ranges.reduce((a, b) => a.end < b.end ? a : b);
+    const start_height = anchor_range.end;
+    //  connection settings scanned_ranges is reset on every scan
+    // (done in setupBlocksBufferGenerator init)
+    // ( they cant contain newer ranges then resulting start height after
+    // lowest fast forward start height on all wallets )
+    return {
+        wallet_configs,
+        start_height,
+        anchor_range,
+        scan_settings,
+    };
+}
+export function workToBeDoneForBatch(cache, batch_meta_infos) {
+    const begin_height = batch_meta_infos[0].block_height;
+    const end_height = batch_meta_infos[batch_meta_infos.length - 1].block_height;
+    log("workToBeDoneForBatch", [begin_height, end_height]);
+    const foundRange = findRange(cache.scanned_ranges, begin_height);
+    log("workToBeDoneForBatch", ["foundRange", foundRange]);
+    if (foundRange) {
+        const fullycovered = cache.scanned_ranges.find((r) => r.start <= begin_height && r.end > end_height);
+        if (fullycovered) {
+            return "skip";
+        }
+        else {
+            // NORMAL CASE directly in front of tip
+            const tip = foundRange.block_hashes.at(0);
+            if (!tip)
+                throw new Error("[workToBeDoneForBatch] tip not found, malformed range that covers the work to be done for this batch");
+            const tipindex = findTipIndex(batch_meta_infos, tip);
+            if (tipindex === "reorg_found") {
+                log("workToBeDoneForBatch", "reorg found");
+                return { from: 0 };
+            }
+            else if (tipindex === "empty_blocks_array") {
+                return "skip";
+            }
+            log("workToBeDoneForBatch", ["tipindex", tipindex]);
+            return { from: tipindex }; // NORMAL case of scheduling directly in front of the tip
+        }
+    }
+    else {
+        // NORMAL case of scheduling work ahead of the already processed ranges, with gap so we can do CPU work in parallel
+        // didnt see this range might be ahead and will be processed in order after the prior batches are processed
+        return { from: 0 };
+    }
+}
+/**
+ * called when the blocks buffer generator yields "blocks_buffer_changed".
+ * adds new work items for blocks buffer items not yet referenced.
+ * per wallet
+ */
+export function makeWorkItemsFromBlocksBuffer(blocksBuffer, workItemBuffer, walletConfig, from, to) {
+    // add work items for blocks buffer items not yet referenced
+    for (const batch of blocksBuffer) {
+        const alreadyReferenced = workItemBuffer.some((w) => w.batch.local_uuid === batch.local_uuid &&
+            w.walletConfig.primary_address === walletConfig.primary_address);
+        if (!alreadyReferenced) {
+            const workToBeDone = workToBeDoneForBatch(walletConfig.cache, batch.get_blocks_result_meta.block_infos);
+            if (workToBeDone === "skip") {
+                continue;
+            }
+            const workItem = makeWorkItem(walletConfig, batch, from, to);
+            log("makeWorkItemsFromBlocksBuffer", [
+                `uuid=${workItem.work_uuid.slice()} to=${workItem.to} from=${workItem.from} batchbegin_height=${batch.get_blocks_result_meta.block_infos[0].block_height} batchend_height=${batch.get_blocks_result_meta.block_infos[batch.get_blocks_result_meta.block_infos.length - 1].block_height}`,
+            ]);
+            workItemBuffer.push(workItem);
+        }
+    }
+}
+export function makeWorkItemsForAllWallets(wallet_configs, blocksBuffer, workBuffer) {
+    for (const wc of wallet_configs) {
+        makeWorkItemsFromBlocksBuffer(blocksBuffer, workBuffer, wc);
+    }
+}
+/**
+ * called when a work item at the left end of the work buffer is done.
+ * shifts done items off the left, and removes their batch from the
+ * blocks buffer if no remaining work items reference it.
+ */
+export function reconcileWorkItemDone(blocksBuffer, workItemBuffer) {
+    log("reconcileWorkItemDone", [
+        `workItemBuffer.length=${workItemBuffer.length} , blocksBuffer.length=${blocksBuffer.length}`,
+    ]);
+    while (workItemBuffer.length > 0 &&
+        workItemBuffer[0].status === "process_result_done") {
+        const removed = workItemBuffer.shift();
+        const stillReferenced = workItemBuffer.some((w) => w.batch.local_uuid === removed.batch.local_uuid);
+        log("reconcileWorkItemDone", [
+            `workItem: ${removed.work_uuid.slice()} removed. stillReferenced=${stillReferenced}`,
+        ]);
+        if (!stillReferenced) {
+            const idx = blocksBuffer.findIndex((b) => b.local_uuid === removed.batch.local_uuid);
+            // this really means we have to save work items scanCache to file
+            // before setting done = true
+            if (idx !== -1)
+                blocksBuffer.splice(idx, 1);
+        }
+    }
+}
+/**
+ * handle a yield from the blocks buffer fetch loop.
+ */
+export async function handleBlocksYield(value, scanSettingsPath) {
+    if ("local_uuid" in value && typeof value.local_uuid === "string") {
+        return { isBlocksBufferChanged: true };
+    }
+    await handleConnectionStatusChanges(value, scanSettingsPath);
+    return { isBlocksBufferChanged: false };
+}
+/**
+ * process a scan result for a completed work item.
+ * updates the cache, writes to disk, marks work item done, reconciles blockbuffer with this.
+ */
+export async function processWorkItem(item, workBuffer, blocksBuffer, pathPrefix, secret_spend_key) {
+    if (item.status !== "scanwork_done")
+        throw new Error("[processWorkItem] item not found or not scanwork not done. item_status=" +
+            item?.status);
+    const cache = item.walletConfig.cache;
+    const last_in_cache = lastRange(cache.scanned_ranges)?.block_hashes.at(0);
+    if (typeof last_in_cache !== "undefined") {
+        const actual_tip_index = findTipIndex(item.batch.get_blocks_result_meta.block_infos, last_in_cache);
+        if (typeof actual_tip_index === "number") {
+            item.from = actual_tip_index;
+        }
+    }
+    const firstBlock = item.batch.get_blocks_result_meta.block_infos[item.from];
+    log("processWorkItem", [
+        `block_infos.length=${item.batch.get_blocks_result_meta.block_infos.length} from=${item.from} to=${item.to}`,
+    ]);
+    const lastBlock = item.batch.get_blocks_result_meta.block_infos[item.to];
+    log("processWorkItem", [
+        item.walletConfig.primary_address.slice(0, 6),
+        "@",
+        firstBlock.block_height,
+        "-",
+        lastBlock.block_height,
+    ]);
+    let res;
+    try {
+        res = await processScanResult({
+            from_height: firstBlock.block_height,
+            to_height: lastBlock.block_height,
+            result: item.result,
+            scanCache: cache,
+            secret_spend_key,
+        });
+        log("processWorkItem", ["res=", res]);
+    }
+    catch (error) {
+        console.error("[processWorkItem] error=", error);
+        throw error;
+    }
+    await writeCacheToFile(cache, pathPrefix);
+    // raw cpu ScanResult is fully merged into cache now. drop it so workBuffer
+    // does not pin all_key_images / hash strings until left-edge free.
+    item.result = undefined;
+    item.status = "process_result_done";
+    log("processWorkItem", `process_result_done work_uuid=${item?.work_uuid}`);
+    // remove from blocksbuffer if no more work items reference it
+    reconcileWorkItemDone(blocksBuffer, workBuffer);
+    //because cache is tied to the workitems by reference,
+    // the following workitems will have the most recent cache
+    // if we do cpu workers we need to be sure to wait with the processing at the top of this functon
+    // until all workitems for this wallet before it (to the left of it) are done
+    //  the cpu worker loop generator will have to ensure the order of this
+    // currently as a sideeffect of the work scheduling function on fetch result aka blocks buffer changed,
+    // this is already implicitly handled
+    return res;
+}
+function logBufStatus(blocksBuffer, workBuffer, ports, label) {
+    const bb = blocksBuffer.map((b) => b.get_blocks_result_meta.block_infos[0]?.block_height +
+        "-" +
+        b.get_blocks_result_meta.block_infos.at(-1)?.block_height);
+    const wb = workBuffer.map((w) => w.status +
+        w.walletConfig.primary_address.slice(0, 6) +
+        "@" +
+        w.batch.get_blocks_result_meta.block_infos[w.from]?.block_height +
+        "-" +
+        w.batch.get_blocks_result_meta.block_infos[w.to]?.block_height);
+    log("logBufStatus", [
+        `[buf] ${label} blocks=[${bb.join(",")}] work=[${wb.join(",")}]`,
+    ]);
+}
+function msToHHMM(ms) {
+    if (!Number.isFinite(ms) || ms < 0)
+        return "00:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${String(hours).padStart(2, "0")}:${String(remainingMinutes).padStart(2, "0")}`;
+}
+function computeETA(cache, totalBlocksScanned, scanStartTime) {
+    const scanProgress = lastRange(cache.scanned_ranges)?.end || 0;
+    const elapsed = Date.now() - scanStartTime;
+    const daemonHeight = cache.daemon_height;
+    if (totalBlocksScanned <= 0 || elapsed <= 0 || daemonHeight <= 0)
+        return undefined;
+    const remaining = daemonHeight - scanProgress;
+    if (remaining <= 0)
+        return "00:00";
+    const blocksPerMs = totalBlocksScanned / elapsed;
+    if (blocksPerMs <= 0)
+        return undefined;
+    const etaMs = remaining / blocksPerMs;
+    return msToHHMM(etaMs);
+}
+export async function setupCoordinator(scanSettingsPath, pathPrefix, stopSync) {
+    const work_to_be_done = await findWorkToBeDone(scanSettingsPath, pathPrefix);
+    if (!work_to_be_done)
+        return false;
+    const { generator: blocksGenerator, blocksBuffer } = await setupBlocksBufferGenerator({
+        nodeUrl: work_to_be_done.scan_settings.node_url,
+        startHeight: work_to_be_done.start_height,
+        anchor_range: work_to_be_done.anchor_range,
+        scanSettingsPath,
+        stopSync,
+    });
+    const workBuffer = [];
+    //TODO: refactor to per wallet buffer
+    // const walletSyncInfos: WalletSyncInfo[] = [];
+    // for (const wallet of work_to_be_done.wallet_configs) {
+    //   walletSyncInfos.push({
+    //     walletConfig: wallet,
+    //     work_buffer: [],
+    //   });
+    // }
+    return {
+        // walletSyncInfos,
+        blocksGenerator,
+        workBuffer,
+        blocksBuffer,
+        work_to_be_done,
+    };
+}
+// flip inflight work back to fresh so a restart can reschedule it
+export function resetInProgressWorkItems(workBuffer) {
+    for (const item of workBuffer) {
+        if (item.status === "scanwork_in_progress") {
+            item.status = "fresh";
+            item.result = undefined;
+        }
+    }
+}
+// tell busy cpu ports to cancel and wait for their promises (with timeout)
+export async function cancelBusyCpuPorts(ports, timeoutMs = 3000) {
+    const busy = ports.filter((ps) => ps.promise);
+    for (const ps of busy) {
+        try {
+            sendToCpuWorker(ps.port, "cancel");
+        }
+        catch (err) {
+            log("cancelBusyCpuPorts", ["send cancel failed", String(err)]);
+        }
+    }
+    if (busy.length === 0)
+        return;
+    await Promise.race([
+        Promise.allSettled(busy.map((ps) => ps.promise)),
+        sleep(timeoutMs),
+    ]);
+    for (const ps of ports) {
+        ps.promise = null;
+    }
+}
+/**
+ * coordinator main (multithreaded): dispatches scan work to CPU workers
+ * via MessagePorts, processes results in order per wallet.
+ * falls back to single-threaded coordinator if no cpuPorts provided.
+ */
+export async function* coordinatorMainMultithreaded(scanSettingsPath, pathPrefix, cpuPorts, stopSync) {
+    if (!cpuPorts || cpuPorts.length === 0) {
+        throw new Error("[coordinatorMain Multithreaded] cpuPorts empty, there must be at least cpu worker");
+    }
+    const ctx = await setupCoordinator(scanSettingsPath, pathPrefix, stopSync);
+    if (!ctx)
+        throw new Error("[coordinatorMain Multithreaded] findWorkToBeDone returned false");
+    const work_to_be_done = ctx.work_to_be_done;
+    const blocksBuffer = ctx.blocksBuffer;
+    const workBuffer = ctx.workBuffer;
+    const blocksGenerator = ctx.blocksGenerator;
+    let totalBlocksScanned = 0;
+    let scanStartTime = Date.now();
+    let blocksPromise = blocksGenerator.next();
+    const freePorts = [];
+    for (const port of cpuPorts) {
+        const ps = {
+            port,
+            promise: null,
+        };
+        freePorts.push(ps);
+    }
+    let race_count = 0;
+    while (true) {
+        if (stopSync?.aborted) {
+            log("coordinatorMainMultithreaded", ["shutdown signal, draining"]);
+            await cancelBusyCpuPorts(freePorts);
+            resetInProgressWorkItems(workBuffer);
+            yield { type: "shutdown_done" };
+            return;
+        }
+        race_count++;
+        log("coordinatorMainMultithreaded", ["race_count", race_count]);
+        await scheduleWorkOnCpuPorts(freePorts, workBuffer);
+        const scan_promises = freePorts
+            .filter((ps) => ps.promise)
+            .map((ps) => ps.promise);
+        const races = [
+            ...scan_promises,
+            blocksPromise.then((v) => ({
+                src: "blocks",
+                value: v,
+            })),
+        ];
+        log("coordinatorMainMultithreaded", ["races", races]);
+        const winner = await Promise.race(races);
+        log("coordinatorMainMultithreaded", "cpu ports status");
+        if ("src" in winner && winner.src === "blocks") {
+            // fetch loop returned (done) on abort, treat as shutdown
+            if (winner.value.done) {
+                log("coordinatorMainMultithreaded", [
+                    "blocks generator done, draining",
+                ]);
+                await cancelBusyCpuPorts(freePorts);
+                resetInProgressWorkItems(workBuffer);
+                yield { type: "shutdown_done" };
+                return;
+            }
+            const result = winner.value.value;
+            const { isBlocksBufferChanged } = await handleBlocksYield(result, scanSettingsPath);
+            if (isBlocksBufferChanged) {
+                //todo pass new blocksbuffer items after simplified blocksbuffer fetch loop
+                makeWorkItemsForAllWallets(work_to_be_done.wallet_configs, [result], workBuffer);
+                yield { type: "blocks_buffer_changed" };
+            }
+            else {
+                yield { type: "connection_status", status: result };
+            }
+            blocksPromise = blocksGenerator.next();
+        }
+        logBufStatus(blocksBuffer, workBuffer, freePorts, "after_winner");
+        for (const wallet of work_to_be_done.wallet_configs) {
+            const workitems_for_wallet = workBuffer.filter((x) => x.walletConfig.primary_address === wallet.primary_address);
+            const processable = [];
+            for (const w of workitems_for_wallet) {
+                if (w.status === "scanwork_done") {
+                    processable.push(w);
+                }
+                else if (w.status === "process_result_done") {
+                    continue;
+                }
+                else {
+                    break;
+                }
+            }
+            const to_be_processed = processable[0];
+            if (!to_be_processed)
+                continue;
+            const blockCount = to_be_processed.to - to_be_processed.from + 1;
+            totalBlocksScanned += blockCount;
+            const res = await processWorkItem(to_be_processed, workBuffer, blocksBuffer, getPathPrefix(scanSettingsPath, pathPrefix), wallet.secret_spend_key);
+            // always persist wallet progress after process; eta only if we have a new one
+            // so missing eta does not wipe the previous value (no flicker)
+            const eta = computeETA(wallet.cache, totalBlocksScanned, scanStartTime);
+            await readWriteConnectionStatusFile((cs) => {
+                applyWalletScanProgress(cs, {
+                    current_scan_height: lastRange(wallet.cache.scanned_ranges)?.end || 0,
+                    scanned_ranges: wallet.cache.scanned_ranges,
+                    daemon_height: wallet.cache.daemon_height,
+                    eta,
+                });
+            }, scanSettingsPath);
+            //  log("coordinatorMainMultithreaded", "processWorkItem result");
+            yield {
+                type: "scan_ready",
+                address: wallet.primary_address,
+                newCache: wallet.cache,
+                changed_outputs: res.changed_outputs,
+            };
+        }
+    }
+}
+export async function scheduleWorkOnCpuPorts(ports, work_buffer) {
+    const fresh_work = work_buffer.filter((x) => x.status === "fresh");
+    const empty_ports = ports.filter((x) => x.promise === null);
+    let fresh_work_index = 0;
+    for (const port_status of empty_ports) {
+        const item = fresh_work[fresh_work_index];
+        fresh_work_index++;
+        if (!item)
+            return;
+        let resolve_port;
+        let resolve_workstart;
+        const workstart_promise = new Promise((resolve) => {
+            resolve_workstart = resolve;
+        });
+        const onmessage = (event) => {
+            const msg = event.data;
+            // handle the result here:
+            log("scheduleWorkOnCpuPorts", ["onmessage result", msg]);
+            // cancel ack may omit work_uuid when idle, but inflight cancel carries it
+            if (msg.type === "Canceled") {
+                if (item.status === "scanwork_in_progress") {
+                    item.status = "fresh";
+                    item.result = undefined;
+                }
+                port_status.promise = null;
+                // thin resolve: dont put full msg/result on the port promise on cancel
+                resolve_port({ type: "Canceled", work_uuid: item.work_uuid });
+                return;
+            }
+            if (msg.work_uuid !== item.work_uuid) {
+                log("scheduleWorkOnCpuPorts", [
+                    "wrong work_uuid in msg msg.work_uuid=",
+                    msg.work_uuid,
+                    "item.work_uuid=",
+                    item.work_uuid,
+                ]);
+                throw new Error("[scheduleWorkOnCpuPorts] wrong work_uuid in msg");
+            }
+            if (msg.type === "WORKSTART") {
+                resolve_workstart();
+                return;
+            }
+            if (item.status !== "scanwork_in_progress") {
+                log("scheduleWorkOnCpuPorts", "wrong status in msg");
+                throw new Error("[scheduleWorkOnCpuPorts] wrong status in msg");
+            }
+            // fat ScanResult lives only on the work item until process clears it
+            item.result = msg.result;
+            item.status = "scanwork_done";
+            // cpu already has its own buffer copy; process only needs meta.
+            // drop work-item bytes now; blocksBuffer still owns the batch until left-edge free.
+            item.batch = {
+                ...item.batch,
+                data: new Uint8Array(0),
+            };
+            port_status.promise = null;
+            // thin resolve: race/await must not retain all_key_images via promise value
+            resolve_port({ type: msg.type, work_uuid: msg.work_uuid });
+        };
+        port_status.port.onmessage = onmessage;
+        item.status = "scanwork_in_progress";
+        log("scheduleWorkOnCpuPorts", ["scheduling work item", item.work_uuid]);
+        port_status.promise = new Promise((resolve) => {
+            resolve_port = resolve;
+        });
+        const strippedItem = {
+            ...item,
+            walletConfig: {
+                primary_address: item.walletConfig.primary_address,
+                secret_view_key: item.walletConfig.secret_view_key,
+                //secret_spend_key: item.walletConfig.secret_spend_key, only needed for processResult to make ownkeyimages
+                subaddress_index: item.walletConfig.subaddress_index,
+            },
+        };
+        for (let attempt = 1;; attempt++) {
+            sendToCpuWorker(port_status.port, strippedItem);
+            try {
+                await Promise.race([
+                    workstart_promise,
+                    sleep(1000).then(() => Promise.reject(new Error("timeout"))),
+                ]);
+                break;
+            }
+            catch {
+                log("scheduleWorkOnCpuPorts", [
+                    "resend attempt",
+                    attempt,
+                    item.work_uuid,
+                ]);
+            }
+        }
+    }
+}

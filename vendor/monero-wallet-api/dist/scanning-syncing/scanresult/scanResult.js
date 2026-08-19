@@ -1,0 +1,279 @@
+import { CatastrophicReorgError } from "../../api";
+import { computeKeyImage } from "./computeKeyImage";
+import { log } from "../../io/logging";
+import { mergeRanges, findRange, findRangeThrows } from "./scanCache";
+import {} from "../../node-interaction/binaryEndpoints";
+import { WasmProcessor } from "../../wasm-processing/wasmProcessor";
+import { monero_wallet_api_wasm } from "../../wasm-processing/wasmFile";
+export async function processScanResult(params) {
+    const { result, scanCache: cache, secret_spend_key } = params;
+    let changed_outputs = [];
+    if (!(result && "primary_address" in result))
+        return processResultReturnValue(cache, params, changed_outputs);
+    if (result && "daemon_height" in result)
+        cache.daemon_height = result.daemon_height;
+    if (result && "new_height" in result) {
+        const oldRange = findRangeThrows(cache.scanned_ranges, params.from_height);
+        let tipIndex = findTipIndex(result.block_infos, oldRange.block_hashes[0]);
+        if (tipIndex === "empty_blocks_array")
+            return processResultReturnValue(cache, params, changed_outputs);
+        if (tipIndex === "reorg_found") {
+            let split_height_index = null;
+            for (const block_hash of oldRange.block_hashes) {
+                split_height_index = findTipIndex(result.block_infos, block_hash);
+                if (typeof split_height_index === "number")
+                    break;
+            }
+            if (typeof split_height_index !== "number")
+                throw new CatastrophicReorgError("could not locate anchors, should not try to processResult on stale workItems");
+            const split_height = result.block_infos[split_height_index];
+            // we found the split height & do the reorg
+            log("processScanResult", [
+                "SPLIT FOUND at height",
+                split_height.block_height,
+            ]);
+            if (!cache.reorg_info) {
+                cache.reorg_info = {
+                    split_heights: [split_height],
+                    removed_outputs: [],
+                    reverted_spends: [],
+                };
+            }
+            else {
+                cache.reorg_info.split_heights.push(split_height);
+            }
+            // First, collect reverted spends from all outputs (before any removals)
+            // so that outputs with block_height < split_height but spent_block_height >= split_height are captured
+            const reverted_outputs = Object.entries(cache.outputs).filter(([id, output]) => output.spent_block_height !== undefined &&
+                output.spent_block_height >= split_height.block_height);
+            const removed_outputs = Object.entries(cache.outputs).filter(([id, output]) => output.block_height >= split_height.block_height);
+            log("processScanResult", [
+                "removed_outputs count:",
+                removed_outputs.length,
+                "reverted count:",
+                reverted_outputs.length,
+            ]);
+            for (const [id, old_output_state] of removed_outputs) {
+                // 1. find key_image of output to be removed (as it was reorged)
+                const [key_image] = Object.entries(cache.own_key_images).find(([own_key_image, globalid]) => globalid === id) || [""]; // if this is viewonly the key_image will be empty
+                cache.reorg_info.removed_outputs.push({
+                    old_output_state,
+                    key_image,
+                    split_height,
+                });
+                // 2. remove from outputs and own_key_images
+                delete cache.outputs[id];
+                delete cache.own_key_images[key_image];
+                changed_outputs.push({
+                    output: old_output_state,
+                    change_reason: "reorged",
+                });
+            }
+            for (const [id, old_output_state_pointer] of reverted_outputs) {
+                const [key_image] = Object.entries(cache.own_key_images).find(([own_key_image, globalid]) => globalid === id) || [""]; // if this is viewonly the key_image will be empty
+                const old_output_state = Object.assign({}, old_output_state_pointer);
+                cache.reorg_info.reverted_spends.push({
+                    old_output_state,
+                    key_image, // in this case key_image only used here, does not get removed
+                    split_height,
+                });
+                // remove spend info from original cache (if output still exists
+                // it may have been deleted above in the removed_outputs loop)
+                if (cache.outputs[id]) {
+                    delete cache.outputs[id].spent_relative_index;
+                    delete cache.outputs[id].spent_in_tx_hash;
+                    delete cache.outputs[id].spent_block_height;
+                    delete cache.outputs[id].spent_block_timestamp;
+                }
+                changed_outputs.push({
+                    output: old_output_state,
+                    change_reason: "reorged_spent",
+                });
+            }
+            tipIndex = split_height_index;
+        }
+        const to_height_index = result.block_infos.findIndex((b) => b.block_height === params.to_height);
+        const new_range = selectAnchors(result.block_infos, tipIndex, oldRange, to_height_index);
+        const last_height = typeof params.to_height === "number"
+            ? params.to_height
+            : result.block_infos[result.block_infos.length - 1].block_height;
+        //first check that no reorg occured by 1. finding oldrange, making sure oldrange end is in the meta blockinfos
+        // if that is not met call reorg handling code
+        //2. make sure reorg handling code works indepented of where the oldrange end is in the meta blockinfos
+        //3. make sure the anchor selection logic works independent of where the oldrange end is in the meta blockinfos
+        //const [new_range, changed] = updateScanHeight(current_range, result, cache);
+        makeNewRange(new_range, cache);
+        const tipHeight = result.block_infos[tipIndex].block_height;
+        const filteredOutputs = result.outputs.filter((o) => o.block_height >= tipHeight && o.block_height <= last_height);
+        const filteredKeyImages = result.all_key_images.filter((ki) => ki.block_height >= tipHeight && ki.block_height <= last_height);
+        changed_outputs.push(...(await detectOutputs({
+            ...result,
+            outputs: filteredOutputs,
+            all_key_images: filteredKeyImages,
+        }, cache, secret_spend_key)));
+        if (secret_spend_key)
+            changed_outputs.push(...detectOwnspends({
+                ...result,
+                outputs: filteredOutputs,
+                all_key_images: filteredKeyImages,
+            }, cache));
+    }
+    return processResultReturnValue(cache, params, changed_outputs);
+}
+export function processResultReturnValue(cache, params, changed_outputs) {
+    return {
+        current_range: findRangeThrows(cache.scanned_ranges, params.from_height),
+        changed_outputs,
+    };
+}
+export function makeNewRange(newRange, cache) {
+    cache.scanned_ranges.push(newRange);
+    // merge existing ranges & find end of current range
+    cache.scanned_ranges = mergeRanges(cache.scanned_ranges);
+    // if we hit the end of a range we already scanned, move scan tip to the end
+    const fastForward = findRange(cache.scanned_ranges, newRange.end);
+    if (fastForward)
+        return fastForward;
+    return newRange;
+}
+// Assumption: result is new, cache is still old. (this + detectOwnspends() turns the catch new, based on the scan result)
+export async function detectOutputs(result, cache, spend_private_key) {
+    let changed_outputs = [];
+    const wasmProcessor = await WasmProcessor.init(monero_wallet_api_wasm);
+    for (const output of result.outputs) {
+        // 0. prevent burning bug and avoid overwriting earlier found outputs
+        const duplicate = Object.values(cache.outputs).find((ex) => ex.stealth_address === output.stealth_address && !ex.burned);
+        let burned = false;
+        if (duplicate?.index_on_blockchain !== output.index_on_blockchain) {
+            burned = true;
+        }
+        if (duplicate && burned) {
+            //mark burned output
+            const existingIndex = duplicate.index_on_blockchain;
+            const liveIndex = Math.min(existingIndex, output.index_on_blockchain);
+            if (liveIndex === existingIndex) {
+                output.burned = existingIndex;
+            }
+            else {
+                duplicate.burned = output.index_on_blockchain;
+            }
+            // here we add to changed_outputs with reason burned
+            changed_outputs.push({ output, change_reason: "burned" });
+        }
+        else if (duplicate && !burned) {
+            continue; // if it is just a duplicate we continue the loop to avoid overwriting (ereasing spent status)
+        }
+        // 1. add to outputs cache 2. add to added array for cacheChanged callback
+        const globalId = output.index_on_blockchain.toString();
+        cache.outputs[globalId] = output;
+        //here we add to changed_outputs with reason added
+        changed_outputs.push({ output, change_reason: "added" });
+        // 3. if this is not view only, add the key image to the cache, to find transactions spent by this wallet
+        if (spend_private_key) {
+            let keyImage = await computeKeyImage(output, spend_private_key, wasmProcessor);
+            if (keyImage) {
+                cache.own_key_images[keyImage] = globalId;
+            }
+        }
+    }
+    return changed_outputs;
+}
+// Assumption: result is new, cache is still old. (this + detectOutputs() turns the catch new, based on the scan result)
+export function detectOwnspends(result, cache) {
+    let changed_outputs = [];
+    for (const onchainKeyImage of result.all_key_images) {
+        if (onchainKeyImage.key_image_hex in cache.own_key_images) {
+            // this is one of ours
+            const globalId = cache.own_key_images[onchainKeyImage.key_image_hex];
+            // add the information where we spent it to the output
+            cache.outputs[globalId].spent_relative_index =
+                onchainKeyImage.relative_index;
+            cache.outputs[globalId].spent_in_tx_hash = onchainKeyImage.tx_hash;
+            cache.outputs[globalId].spent_block_height = onchainKeyImage.block_height;
+            cache.outputs[globalId].spent_block_timestamp =
+                onchainKeyImage.block_timestamp;
+            //here we add to changed_outputs with reason ownspend
+            changed_outputs.push({
+                output: cache.outputs[globalId],
+                change_reason: "ownspend",
+            });
+        }
+    }
+    return changed_outputs;
+}
+export function unlockedAtHeight(output) {
+    if (output.is_miner_tx) {
+        return output.block_height + 60;
+    }
+    else {
+        return output.block_height + 10;
+    }
+}
+export function outputStatus(output, cache, current_height) {
+    if (
+    // order matters, check this before "spent" check + "pending" check
+    cache.pending_spent_utxos &&
+        cache.pending_spent_utxos[output.index_on_blockchain.toString()]) {
+        return { status: "prepending" };
+    }
+    if (typeof output.burned === "number") {
+        return { status: "burnt" };
+    }
+    if (typeof output.spent_in_tx_hash === "string") {
+        return { status: "spent" };
+    }
+    const unlock_height = unlockedAtHeight(output);
+    if (unlock_height > current_height) {
+        return { status: "pending", unlock_height };
+    }
+    // TODO: check that that output is not txlog input indeces
+    return { status: "spendable" };
+}
+export function spendable(output, cache, current_height) {
+    const status = outputStatus(output, cache, current_height);
+    return status.status === "spendable";
+}
+export function findTipIndex(block_infos, oldTip) {
+    if (block_infos.length === 0)
+        return "empty_blocks_array";
+    const idx = block_infos.findIndex((b) => b.block_hash === oldTip.block_hash);
+    if (idx === -1)
+        return "reorg_found";
+    return idx;
+}
+export function selectAnchors(block_infos, tipIndex, oldRange, endIndex = block_infos.length - 1) {
+    const tip = block_infos[tipIndex];
+    const last = block_infos[endIndex];
+    const { newCandidateAnchor, newAnchor } = newAnchorCandidates(oldRange, block_infos, tipIndex, endIndex, last);
+    return {
+        start: tip.block_height,
+        end: last.block_height,
+        block_hashes: [last, newCandidateAnchor, newAnchor],
+        // newest, middle, oldest
+    };
+}
+export function shouldReplaceAnchor(oldRange, last) {
+    const oldAnchor = oldRange.block_hashes.at(2);
+    if (!oldAnchor)
+        throw new Error("old Range malformed");
+    if (
+    //if the old anchor is more than 200 blocks old
+    last.block_height - oldAnchor.block_height >
+        200) {
+        return true;
+    }
+}
+export function newAnchorCandidates(oldRange, block_infos, tipIndex, endIndex, last) {
+    const oldCandidateAnchor = oldRange.block_hashes.at(1);
+    const oldAnchor = oldRange.block_hashes.at(2);
+    if (!oldAnchor || !oldCandidateAnchor || !last)
+        throw new Error("old Range malformed");
+    if (shouldReplaceAnchor(oldRange, last)) {
+        const newCandidateAnchorIndex = Math.max(tipIndex, endIndex - 100);
+        const newCandidateAnchor = block_infos[newCandidateAnchorIndex];
+        if (!newCandidateAnchor)
+            throw new Error("tipIndex clamped candidate anchor index out of range");
+        return { newCandidateAnchor, newAnchor: oldCandidateAnchor };
+    }
+    return { newCandidateAnchor: oldCandidateAnchor, newAnchor: oldAnchor };
+}

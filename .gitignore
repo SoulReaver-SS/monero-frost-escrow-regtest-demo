@@ -1,0 +1,66 @@
+# Dependencies and generated builds
+node_modules/
+.pnpm-store/
+build/
+/dist/
+coverage/
+.cache/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.project-config.json
+.env
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local FROST/Monero runtime state — never commit
+*.frost
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+escrow-demo/
+role-hosts/
+escrow-setup/
+snapshot-data/
+fakechain/
+regtest/
+xmr-regtest/
+monero-data/
+monero-*/
+data/
+private.json
+mediator-secret.json
+mediator-public.json
+ScanSettings.json
+role-relay.log
+*.wallet
+*.keys
+*.pid
+*.pid.lock
+
+# Logs, OS, IDE, and temporary files
+*.log
+logs/
+tmp/
+temp/
+.frost-code-update-backups/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# The prebuilt wallet API is source required by the local runtime, not a build artifact.
+!vendor/
+!vendor/monero-wallet-api/
+!vendor/monero-wallet-api/dist/
+!vendor/monero-wallet-api/dist/**

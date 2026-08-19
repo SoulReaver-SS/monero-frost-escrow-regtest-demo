@@ -1,0 +1,299 @@
+import {} from "../scanning-syncing/scanresult/scanResult";
+export {};
+export { NodeUrl } from "../node-interaction/nodeUrl";
+import { getBlocksBinScan, getBlocksBinExecuteRequest, getBlocksBinScanOneBlock, loadGetBlocksBinResponse, MAINNET_GENESIS_BLOCK_HASH, STAGENET_GENESIS_BLOCK_HASH, } from "../node-interaction/binaryEndpoints";
+import { lastRange, writeCacheFileDefaultLocationThrows, } from "../scanning-syncing/scanresult/scanCache";
+import { makeSweepTransaction, makeTransaction, } from "../send-functionality/transactionBuilding";
+import { monero_wallet_api_wasm } from "../wasm-processing/wasmFile";
+import { WasmProcessor } from "../wasm-processing/wasmProcessor";
+import { LOCAL_NODE_DEFAULT_URL, } from "../node-interaction/nodeUrl";
+import { get_block_headers_range, get_info, } from "../api";
+import { readWalletFromScanSettings } from "../api";
+import { sleep } from "../io/sleep";
+/**
+ * This class is useful to interact with Moneros DaemonRpc binary requests in a convenient way.
+ * (similar to how you would interact with a REST api that gives you json back.)
+ * The wasm part will handle the creation of the binary requests and parse the responses and then parse them
+ * and return outputs that belong to the ViewPair.
+ * {@link https://docs.getmonero.org/rpc-library/monerod-rpc/#get_blocksbin}
+ */
+export class ViewPair extends WasmProcessor {
+    node_url;
+    primary_address;
+    _network;
+    get network() {
+        return this._network; // we set this in ViewPair.create()
+    }
+    _genesis_hash;
+    get genesis_hash() {
+        if (!this._genesis_hash) {
+            throw new Error("Genesis hash not set. Node not connected?");
+        }
+        return this._genesis_hash; // set in first call to ViewPair.getBlocksBin, if params.block_ids is supplied
+    }
+    constructor(node_url, primary_address) {
+        super();
+        this.node_url = node_url;
+        this.primary_address = primary_address;
+    }
+    static async create(primary_address, secret_view_key, subaddress_index = 0, node_url) {
+        const viewPair = new ViewPair(node_url || LOCAL_NODE_DEFAULT_URL, primary_address);
+        const tinywasi = await viewPair.initWasmModule(monero_wallet_api_wasm);
+        viewPair.writeToWasmMemory = (ptr, len) => {
+            viewPair.writeString(ptr, len, primary_address);
+            viewPair.writeToWasmMemory = (ptr, len) => {
+                viewPair.writeString(ptr, len, secret_view_key);
+            };
+        };
+        let init_viewpair_result = undefined;
+        let init_viewpair_error = undefined;
+        viewPair.readFromWasmMemory = (ptr, len) => {
+            init_viewpair_result = JSON.parse(viewPair.readString(ptr, len));
+        };
+        viewPair.readErrorFromWasmMemory = (ptr, len) => {
+            init_viewpair_error = JSON.parse(viewPair.readString(ptr, len));
+        };
+        //@ts-ignore
+        tinywasi.instance.exports.init_viewpair(primary_address.length, secret_view_key.length, subaddress_index);
+        if (init_viewpair_error && "error" in init_viewpair_error) {
+            throw new Error(`primary-address-not-valid (${primary_address.slice(0, 8)}...${primary_address.slice(-8)})`);
+        }
+        if (!init_viewpair_result) {
+            throw new Error("Failed to init viewpair");
+        }
+        //@ts-ignore
+        viewPair._network = init_viewpair_result.network;
+        return viewPair;
+    }
+    /**
+     * This function helps with making requests to the get_blocks.bin endpoint of the Monerod nodes. It does the Request and returns the outputs that belong to the ViewPair.
+     * (if outputs are found in the blocks that are returned)
+     *
+     * if params.block_ids is supplied, it will add the genesis hash to the end of the block_ids array.
+     * (so you can just supply the block_id you want to start fetching from)
+     * @link https://docs.getmonero.org/rpc-library/monerod-rpc/#get_blocksbin
+     * @param params params that will be turned into epee (monero lib that does binary serialization)
+     * @param metaCallBack contains meta information about the getBlocksbin call (new sync height = start_height param + number of blocks)
+     * @param stopSync optional AbortSignal to stop the syncing process
+     * @returns The difference to the same method on NodeUrl is: It returns {@link ScanResult} (outputs that belong to viewpair) and not just the blocks as json.
+     */
+    async getBlocksBin(params, metaCallBack, stopSync) {
+        return await getBlocksBinScan(this, await this.addGenesisHashToBlockIds(params), metaCallBack, stopSync);
+    }
+    async addGenesisHashToBlockIds(params) {
+        if (params.block_ids) {
+            if (!this._genesis_hash && this.network === "mainnet") {
+                this._genesis_hash = MAINNET_GENESIS_BLOCK_HASH;
+            }
+            if (!this._genesis_hash && this.network === "stagenet") {
+                this._genesis_hash = STAGENET_GENESIS_BLOCK_HASH;
+            }
+            if (!this._genesis_hash) {
+                // TESTNET
+                const range = await this.getBlockHeadersRange({
+                    start_height: 0,
+                    end_height: 0,
+                });
+                this._genesis_hash = range.headers[0].hash;
+            }
+            params.block_ids.push(this.genesis_hash);
+        }
+        return params;
+    }
+    /**
+     * This function helps with making requests to the get_blocks.bin endpoint of the Monerod nodes.
+     * if params.block_ids is supplied, it will add the genesis hash to the end of the block_ids array.
+     * (so you can just supply the block_id you want to start fetching from)
+     *
+     * The difference compared to the getBlocksBin method is that it returns a Uint8Array that still has to be scanned for outputs.
+     * This is useful if you want to scan multiple viewpairs at once. You can take the Uint8Array and pass it to another ViewPair to scan for outputs.
+     * @param params params that will be turned into epee (monero lib that does binary serialization)
+     * @param stopSync optional AbortSignal to stop the syncing process
+     * @returns This method will return a Uint8Array that can subsequently be scanned for outputs with the getBlocksBinScanResponse method.
+     */
+    async getBlocksBinExecuteRequest(params, stopSync) {
+        return await getBlocksBinExecuteRequest(this, await this.addGenesisHashToBlockIds(params), stopSync);
+    }
+    /**
+     * This function helps with scanning the response of the getBlocksBinExecuteRequest method.
+     * It will parse the Uint8Array and return the outputs that belong to the ViewPair.
+     * (if outputs are found in the blocks that are contained in the Uint8Array that was returned by the getBlocksBinExecuteRequest method)
+     * @link https://docs.getmonero.org/rpc-library/monerod-rpc/#get_blocksbin
+     * @param getBlocksBinResponseBuffer the Uint8Array that was returned by the getBlocksBinExecuteRequest method.(which contains the blocks in binary format, returned from the Monerod node)
+     * @param metaCallBack contains meta information about the getBlocksbin call (new sync height = start_height param + number of blocks)
+     * @returns It returns {@link ScanResult} (outputs that belong to viewpair)
+     */
+    async getBlocksBinScanResponse(getBlocksBinResponseBuffer, metaCallBack) {
+        const meta = await this.loadGetBlocksBinResponse(getBlocksBinResponseBuffer);
+        if ("error" in meta)
+            return meta;
+        if (metaCallBack)
+            metaCallBack(meta);
+        const result = {
+            outputs: [],
+            all_key_images: [],
+            new_height: meta.new_height,
+            primary_address: this.primary_address,
+            block_infos: meta.block_infos,
+            daemon_height: meta.daemon_height,
+        };
+        for (let i = 0; i < meta.block_infos.length; i++) {
+            const blockResult = await getBlocksBinScanOneBlock(this, i);
+            if ("error" in blockResult)
+                return blockResult;
+            result.outputs.push(...blockResult.outputs);
+            result.all_key_images.push(...blockResult.all_key_images);
+            await sleep(10);
+        }
+        return result;
+    }
+    /**
+     * Loads a getBlocks.bin response into the WASM module without scanning for outputs.
+     * The stored response can later be used to scan individual blocks. Subsequent calls
+     * overwrite the previously stored response.
+     * @param getBlocksBinResponseBuffer the raw binary response from the get_blocks.bin endpoint
+     * @returns metadata about the loaded blocks (new_height, daemon_height, status, block_infos)
+     */
+    loadGetBlocksBinResponse(getBlocksBinResponseBuffer) {
+        return loadGetBlocksBinResponse(this, getBlocksBinResponseBuffer);
+    }
+    /**
+     * scan one block from a getblocks.bin response that was loaded into wasm memory.
+     * call loadGetBlocksBinResponse first to populate the response in the wasm module.
+     * call this in a loop over blockIndex 0..meta.block_infos.length-1 to scan all blocks.
+     * @param blockIndex index of the block within the loaded response (0-based)
+     * @returns scan result with outputs and all key images for that one block.
+     *          returns ErrorResponse (`{ error: string }`) if scanning fails.
+     *          check `if ("error" in result)` before accessing outputs/key_images.
+     *
+     * error cases from the rust wasm (search these strings in rust/src/):
+     * - "Block index {} out of bounds (total blocks: {})"
+     *   blockIndex >= number of blocks in the loaded response
+     * - "No getBlocks.bin response loaded. Call loadGetBlocksBinResponse first."
+     *   forgot to call loadGetBlocksBinResponse before this method
+     * - "Error scanning miner transaction: {}"
+     *   the miner tx of the block could not be scanned
+     * - "Error scanning block: {}"
+     *   the block could not be scanned
+     */
+    getBlocksBinScanOneBlock(blockIndex) {
+        return getBlocksBinScanOneBlock(this, blockIndex);
+    }
+    /**
+     * This method makes an integrated Address for the Address of the Viewpair it was opened with.
+     * The network (mainnet, stagenet, testnet) is the same as the one of the Viewpairaddress.
+     * @param paymentId (u64 under the hood) you can use a random number or a primary key of an sqlite db to associate payments with customer sessions.
+     * @returns Adressstring
+     */
+    makeIntegratedAddress(paymentId) {
+        let address = "";
+        this.readFromWasmMemory = (ptr, len) => {
+            address = this.readString(ptr, len);
+        };
+        //@ts-ignore
+        this.tinywasi.instance.exports.make_integrated_address(BigInt(paymentId));
+        return address;
+    }
+    /**
+     * This method makes a Subaddress for the Address of the Viewpair it was opened with.
+     * The network (mainnet, stagenet, testnet) is the same as the one of the Viewpairaddress.
+     * if there is an active scan going on, call this on ScanCacheOpened, so the new subaddress will be scanned
+     *
+     * @param minor address index, we always set major (also called account index) to 0
+     * @returns Adressstring
+     */
+    makeSubaddress(minor) {
+        return this.makeSubaddressRaw(0, minor);
+    }
+    async writeSubaddressesToScanCache(scan_settings_path, pathPrefix) {
+        await writeCacheFileDefaultLocationThrows({
+            primary_address: this.primary_address,
+            pathPrefix: pathPrefix,
+            writeCallback: async (cache) => {
+                await this.addSubaddressesToScanCache(cache, scan_settings_path);
+            },
+        });
+    }
+    async addSubaddressesToScanCache(cache, scan_settings_path) {
+        const walletSettings = await readWalletFromScanSettings(this.primary_address, scan_settings_path);
+        if (!walletSettings)
+            throw new Error(`wallet not found in settings. did you call openwallet with the right params?
+          Either wrong file name supplied to params.scan_settings_path: ${scan_settings_path}
+          Or wrong primary_address supplied params.primary_address: ${this.primary_address}`);
+        const last_subaddress_index = walletSettings.subaddress_index || 1;
+        if (!cache.subaddresses)
+            cache.subaddresses = [];
+        const highestMinor = Math.max(...cache.subaddresses.map((sub) => sub.minor), 0);
+        let minor = highestMinor + 1;
+        while (minor <= last_subaddress_index) {
+            const subaddress = this.makeSubaddress(minor);
+            const created_at_height = lastRange(cache.scanned_ranges)?.end || 0;
+            const created_at_timestamp = new Date().getTime();
+            cache.subaddresses.push({
+                minor,
+                address: subaddress,
+                created_at_height,
+                created_at_timestamp,
+            });
+            minor++;
+        }
+    }
+    /**
+     * This method makes a Subaddress for the Address of the Viewpair it was opened with.
+     * The network (mainnet, stagenet, testnet) is the same as the one of the Viewpairaddress.
+     *
+     * @param major account index should be set to 0 in most cases
+     * @param minor address index starting at 1
+     * @returns Adressstring
+     */
+    makeSubaddressRaw(major, minor) {
+        if (typeof major !== "number" ||
+            typeof minor !== "number" ||
+            major < 0 ||
+            minor < 1)
+            throw new Error(`subaddress major and minor must be positive numbers, minor index must be above 1.
+          makeSubaddressRaw arguments: major: ${major}, minor: ${minor}`);
+        let address = "";
+        this.readFromWasmMemory = (ptr, len) => {
+            address = this.readString(ptr, len);
+        };
+        //@ts-ignore
+        this.tinywasi.instance.exports.make_subaddress(major, minor);
+        return address;
+    }
+    /**
+     * Creates a signable transaction using the provided parameters.
+     * @param params - The transaction parameters.
+     * @returns The serialized transaction as an array of numbers.
+     */
+    makeTransaction(params) {
+        return makeTransaction(this, params);
+    }
+    /**
+     * makeSweepTransaction
+     * @param params - The transaction parameters. Must have exactly one payment,
+     *  the amount will be overwritten by the total amount of the inputs - the necessary fee
+     *
+     * @returns The serialized transaction as an array of numbers
+     */
+    makeSweepTransaction(params) {
+        return makeSweepTransaction(this, params);
+    }
+    /**
+     * Retrieve block headers for a specified range of heights.
+     * @link https://docs.getmonero.org/rpc-library/monerod-rpc/#get_block_headers_range
+     * @param params The parameters including start_height, end_height, and optional fill_pow_hash.
+     * @returns The result object with headers, status, etc. Throws if the range is invalid:(end_height > daemonheight)
+     */
+    async getBlockHeadersRange(params) {
+        return await get_block_headers_range(this.node_url, params);
+    }
+    /**
+     * Fetch general information about the Monero daemon.
+     * @link https://docs.getmonero.org/rpc-library/monerod-rpc/#get_info
+     * @returns The result object with daemon info like height, status, etc.
+     */
+    async getInfo() {
+        return get_info(this.node_url);
+    }
+}

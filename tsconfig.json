@@ -1,0 +1,16 @@
+{
+  "include": ["local-runtime/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "build", "dist", "coverage", "**/*.test.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "ESNext",
+    "target": "ES2022",
+    "strict": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "moduleResolution": "bundler",
+    "types": ["bun-types", "node"]
+  }
+}

@@ -1,0 +1,63 @@
+import { ViewPair, type Output } from "../../api";
+import type { ScanCache, Subaddress, TxLog } from "./scanCache";
+import { type OutputStatus } from "./scanResult";
+export type WriteStatsFileParams = {
+    primary_address: string;
+    pathPrefix?: string | undefined;
+    writeCallback: (stats: ScanStats) => void | Promise<void>;
+};
+export declare function writeStatsFileDefaultLocation(params: WriteStatsFileParams): Promise<ScanStats>;
+export declare function statsFileDefaultLocation(primary_address: string, pathPrefix?: string): string;
+export declare function readStatsFile(cacheFilePath: string): Promise<ScanStats | undefined>;
+export declare function readStatsFileDefaultLocation(primary_address: string, pathPrefix?: string): Promise<ScanStats | undefined>;
+export declare function addSpentAmount(scan_stats: ScanStats, output: Output): void;
+export declare function addSpendableAmount(scan_stats: ScanStats, output: Output): void;
+export declare function addPendingAmount(scan_stats: ScanStats, output: Output): void;
+export type SubaddressMinorIndex = string;
+export type Amount = bigint;
+export type FoundTransaction = {
+    amount: bigint;
+    inputs: Output[];
+    outputs: Output[];
+    tx_hash: string;
+    status: OutputStatus;
+    payment_id: number;
+    confirmations: number;
+    txlog?: TxLog;
+};
+export type TxHash = string;
+export type ScanStats = {
+    height: number;
+    total_spendable_amount: bigint;
+    total_pending_amount: bigint;
+    primary_address: string;
+    primary_address_received_amount?: bigint;
+    primary_address_pending_amount?: bigint;
+    subaddresses: Record<SubaddressMinorIndex, Subaddress>;
+    found_transactions: Record<TxHash, FoundTransaction>;
+    ordered_transactions: TxHash[];
+};
+export declare function confirmationsOfOutput(output: Output, daemon_height: number): number;
+export declare function processFoundTransactions(cache: ScanCache, stats: ScanStats, current_height: number): void;
+export declare function removeChangeFromPrimaddressAmounts(stats: ScanStats): void;
+export declare function addSubAddressesFromCacheToScanStats(cache: ScanCache, stats: ScanStats): void;
+export declare function addMissingSubAddressesToScanStats(stats: ScanStats, view_pair: ViewPair, highestSubaddressMinor?: number, created_at_height?: number): void;
+export declare function isSelfSpent(address: string, cache: ScanCache): boolean;
+export declare function removeChangeFromPrimAddressReceivedAmounts(stats: ScanStats): void;
+export type PrePendingTx = {
+    amount: bigint;
+    inputs: Output[];
+    txlog: TxLog;
+    inputSum: bigint;
+    outWardPaymentSum: bigint;
+    self_spent: boolean;
+    destination_address: string;
+};
+export declare function processTxlogPayments(txlog: TxLog, cache: ScanCache): bigint;
+export declare function processTxlogInputs(txlog: TxLog, cache: ScanCache): {
+    inputSum: bigint;
+    alreadyRecognizedAsSpend: boolean;
+};
+export declare function processTxlogs(cache: ScanCache, stats: ScanStats): void;
+export declare function alignScanStatsWithCache(cache: ScanCache, view_pair: ViewPair, primary_address: string, pathPrefix?: string, highestSubaddressMinor?: number, current_scan_tip_height?: number): Promise<ScanStats>;
+export declare function resetStats(stats: ScanStats): void;

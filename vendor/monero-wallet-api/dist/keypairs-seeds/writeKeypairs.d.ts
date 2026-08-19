@@ -1,0 +1,12 @@
+export declare const stagenet_pk_path = ".env";
+export declare const testnet_pk_path = ".env.local";
+export declare const regtest_pk_path = ".env.local";
+export declare function writeStagenetSpendViewKeysToDotEnv(spend_key?: string): Promise<string>;
+export declare function writeRegtestSpendViewKeysToDotEnvTestLocal(spend_key?: string): Promise<string>;
+export declare function writeTestnetSpendViewKeysToDotEnvLocal(spend_key?: string): Promise<string>;
+export declare function writeWalletSecretsToDotEnv(wallet_secret: Uint8Array): Promise<string>;
+export declare function writeViewKeyToDotEnv(primary_address: string, view_key: string): Promise<void>;
+export declare function writeEnvLineToDotEnvRefresh(key: string, value: string, path?: string): Promise<void>;
+export declare function writeEnvLineToDotEnv(key: string, value: string, path?: string): Promise<void>;
+export declare const STAGENET_FRESH_WALLET_HEIGHT_DEFAULT = 2014841;
+export declare const REGTEST_FRESH_WALLET_HEIGHT_DEFAULT = 1;

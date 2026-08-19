@@ -1,0 +1,228 @@
+# Project TODO
+
+- [x] Document the local-only runtime boundary and deployment limitation for the regtest daemon.
+- [x] Add a setup script that installs required system tools, downloads and SHA-256 verifies monerod, and starts an offline regtest node.
+- [x] Add a setup script that verifies `nettype=fakechain`, mines 1000 regtest blocks once, and snapshots the resulting data directory for reset reuse.
+- [x] Vendor the prebuilt `@spirobel/monero-wallet-api` distribution without compiling Rust or WASM.
+- [x] Model and migrate durable escrow-session state for serializable FROST intermediates and transaction records.
+- [x] Implement an in-process signer registry keyed by escrow-session ID for non-serializable `MultiSigTxSigner` instances.
+- [x] Port the reference FROST DKG flow for buyer, seller, and offline mediator participation, including common-group-key verification.
+- [x] Configure scan settings, escrow-address registration, regtest decoy retry, and real log-file collection.
+- [x] Implement buyer funding and seller detection using actual regtest wallet operations.
+- [x] Implement threshold payouts that match the confirmed model: buyer plus seller on the happy path, and seller plus delayed mediator verification on the dispute path.
+- [x] Restore durable FROST state after a process restart between setup and payout.
+- [x] Implement the buyer and seller panes, mediator status strip, and auto-refreshing real log panel with the required labels.
+- [x] Add runtime tests for persistence, signer registry lifecycle, log filtering, and UI-state transitions.
+- [x] Run the complete local regtest acceptance flow and capture only real execution output.
+- [x] Review the completed work items, then create a project checkpoint and provide operating instructions.
+- [x] Implement the corrected 3-of-5 role allocation: buyer two shares, seller two shares, and mediator one share.
+- [x] Implement the default happy-path payout with buyer and seller shares only, without loading the mediator secret at any stage.
+- [x] Implement a dispute-path toggle that loads the mediator secret only at payout, runs delayed `verify()` from persisted participations, and combines seller plus mediator shares.
+- [x] Add real SQLite reload tests for persisted protocol records and escrow session state.
+- [x] Add signer-registry lifecycle tests covering creation, reuse, cleanup, and missing-signer failures.
+- [x] Add log-prefix and server-rendered workflow-state tests for every escrow transition.
+- [x] Capture raw five-participant DKG verification output with all group keys.
+- [x] Capture raw fakechain payment transaction lookup and merchant-wallet balances for the happy path.
+- [x] Capture raw fakechain payment transaction lookup, mediator preprocess/share evidence, and merchant-wallet balances for the dispute path.
+- [x] Capture the exact mediator-secret code path and confirm the happy-path gate prevents any mediator-secret read.
+- [x] Audit and report every `generateblocks` and funding-wallet operation outside the setup script.
+- [x] Deliver the requested raw evidence without summarizing or fabricating missing output.
+- [x] Capture every non-setup buyer-wallet funding, signing, broadcast, and block-generation source line.
+- [x] Deliver the preserved raw evidence files and direct audit answer to the user.
+- [x] Move delayed mediator signing to a separate loopback-only local process that starts only for dispute payout and exits after signing.
+- [x] Ensure the mediator secret is read only by the isolated mediator process and never serialized into coordinator request data.
+- [x] Expose observable mediator process status in the local server-rendered UI.
+- [x] Add a test proving the mediator process is absent through setup, funding, scanning, and happy-path payout.
+- [x] Add a read-only session audit view covering DKG records, group keys, transaction hashes, block heights, sweep outcomes, and signing shares.
+- [x] Support plain-text and JSON audit exports without allowing state mutation.
+- [x] Disclose in the interface that `generateblocks` simulates regtest confirmation time.
+- [x] Disclose in the interface that server-held buyer and seller shares are a demo-only simplification.
+- [x] Run and capture a happy-path mediator-absent validation and dispute-path mediator-present validation.
+- [x] Deliver raw five-participant verification output with visible matching group keys.
+- [x] Deliver raw buyer-payment and sweep transaction lookup output with merchant balances before and after payout.
+- [x] Deliver raw mediator process absence/presence output and process-restart threshold-key recovery output.
+- [x] Deliver the exact names of all current tests.
+- [x] Capture a fresh happy-path session with raw merchant balances before and after payout and a coordinator restart between setup and payout.
+- [x] Capture a fresh buyer-payment `get_transactions` response and raw verbose test-name output.
+- [x] Verify and evidence `decoyRetry` on the escrow payout wallet as well as the customer funding wallet.
+- [x] Verify and evidence that setup mines the required 1000 fakechain blocks before wallet transactions.
+- [x] Correct any missing payout-wallet decoy setting or snapshot mining-depth discrepancy.
+- [x] Run one clean happy-path session and capture raw merchant balances before and after sweep plus the sweep transaction ID.
+- [x] Write a local-run README covering verified daemon flags, snapshot preparation, chain seeding, coordinator startup, and block-mining expectations.
+- [x] Package the complete local demonstration repository into a downloadable archive and verify its contents.
+- [x] Replace unsafe BigInt JSON serialization with a durable atomic-value encoding and verify the happy path records no serialization error or lost state.
+- [x] Prevent mediator-card text clipping and add a clear dispute-action control and relationship explanation.
+- [x] Restrict the live protocol log to role-tagged protocol lines and errors while retaining complete file chatter in audit export.
+- [x] Show elapsed session time or block height on displayed protocol log lines, including mediator absence through the happy path.
+- [x] Replace paid-out disabled workflow prompts with a completed payout summary in the buyer, seller, and mediator panes.
+- [x] Add and run unit and local-flow validation for the corrected state, logs, controls, and completed UI.
+- [x] Preserve complete unfiltered session library logs in the audit export while retaining the concise protocol-only live log.
+- [x] Document and verify the exact clean recording reset procedure and snapshot behavior.
+- [x] Capture screenshots for initial, setup, funding-broadcast, funded, and completed happy-path states.
+- [x] Capture active dispute mediator process status, mediator signing logs, and the dispute completion state.
+- [x] Add a recording-only configurable mediator shutdown delay so its real running state can be captured without changing the normal default lifecycle.
+- [x] Emit explicit mediator preprocess and signature-share protocol events during dispute payout for observable evidence.
+- [x] Explain and correct any difference between session elapsed display and final protocol-event elapsed time.
+- [x] Package the requested current raw evidence, including audits, transaction lookups, merchant balances, and mediator PID lifecycle records.
+- [x] Capture and package a completed happy-path screenshot for the intermediate-state set.
+- [x] Explicitly distinguish live wall-clock session age from the elapsed time of the last protocol event in the coordinator UI.
+- [x] Rebuild the evidence package with clearly labeled current-run transaction IDs and preserve the historical happy-path merchant-balance evidence separately.
+- [x] Add the prior happy-path merchant-balance records to a clearly labeled historical section of the final evidence package.
+- [x] Write and verify a single end-to-end guide for local preparation, execution, recording reset, Tailscale-only access, and shutdown.
+- [x] Bind the coordinator explicitly to loopback so Tailscale Serve is the sole intended remote-access path.
+- [x] Add a foreground one-command bootstrap that installs dependencies, prepares the snapshot when needed, and starts the coordinator.
+- [x] Add explicit bootstrap options for snapshot reset, recording-only mediator observation, and Tailscale Serve configuration.
+- [x] Validate bootstrap help and safe non-destructive checks, then package the updated runnable repository archive.
+- [x] Resolve Bun from the explicit override, standard user installation, PATH, or legacy development path so the bootstrap runs on a normal Linux or WSL account.
+- [x] Provision pnpm through Bun on the first bootstrap run when Node.js exists but pnpm is absent, and provide a clear Node.js fallback when Node itself is missing.
+- [x] Validate the actual pnpm-absent Corepack or user-local npm provisioning path without running the fakechain workflow.
+- [x] Resolve Bun portably in the SQLite persistence contract test and package a replacement archive that passes on a standard user installation.
+- [x] Smoke-test the persistence suite with Bun resolved from a standard `~/.bun/bin/bun` path and verify the final archive contains that portable resolver.
+- [x] Inspect the archived persistence-test source and confirm it includes `resolveBunExecutable()` before delivery.
+- [x] Diagnose the reported indefinitely loading Initialize escrow action on a fresh local run and provide an exact recovery procedure.
+- [x] Add durable initialization progress events and a bounded failure path so a remote user can distinguish an active FROST setup from a stall.
+- [x] Validate a real initialization run with early durable progress events visible through the local log endpoint.
+- [x] Make initialization progress visible from the primary workflow page without relying on a second terminal or tab.
+- [x] Exercise the generator initialization timeout path and verify it redirects with a recorded error rather than hanging.
+- [x] Verify that early initialization progress is visible through the live `/log` endpoint before setup completion.
+- [x] Exercise an end-to-end setup timeout or failure route and verify the UI becomes retryable with its error recorded.
+- [x] Permit a retry when an existing session row has returned to `not_initialized` after an initialization failure.
+- [x] Capture the live `/log` output during a normal initialization while its status is still `initializing`.
+- [x] Deliver the exact stop, reset, restart, and retry procedure for the user’s currently stalled local coordinator.
+- [x] Add a visible cancel-initialization action that safely restores the workflow to a retryable state.
+- [x] Show per-stage elapsed time during initialization and record stage timing in the session audit.
+- [x] Generate and link a read-only diagnostic export automatically after an initialization timeout or cancellation.
+- [x] Show XMR and atomic amounts, public addresses, public protocol keys, transaction IDs, observations, and confirmation state in the local UI.
+- [x] Ensure secret FROST shares, private wallet spend/view keys, and the mediator secret remain redacted from every UI and diagnostic export.
+- [x] Show the latest initialization diagnostic link on the primary retryable page after a timeout or cancellation.
+- [x] Redact FROST participation, preprocess, and signature-share material from every audit and diagnostic export while retaining public summaries.
+- [x] Define a small code-only update overlay that does not include dependencies, fakechain data, wallets, or existing session state.
+- [x] Add a safe local script that applies an extracted update overlay to an existing installation without deleting its durable state.
+- [x] Document the future update procedure and package a lightweight release archive.
+- [x] Create a modular full-distribution layout that separates replaceable code from dependencies and durable local data.
+- [x] Add a root launcher that runs the coordinator from the modular code directory without moving user state.
+- [x] Add a code-directory replacement procedure and package a full modular archive for first-time installation.
+- [x] Launch an extracted modular archive through the root launcher and verify the coordinator UI responds without altering dependency or durable-runtime sentinels.
+- [x] Replace the hard-coded localhost action redirect with a relative redirect that preserves 127.0.0.1 and Tailscale origins.
+- [x] Add redirect regression coverage and rebuild the modular archive with the correction.
+- [x] Replace the one-second auto-refreshing activity-log iframe with a stable newest-first protocol-event panel.
+- [x] Add coverage for newest-first readable activity rendering and rebuild the modular archive.
+- [x] Detect and reject old or mixed project layouts before the modular launcher attempts dependency installation.
+- [x] Improve first-run instructions and rebuild the modular archive with the fail-fast startup guard.
+- [x] Permit the modular distribution to run from the user's Desktop/Terminus Sync folder and remove location-based rejection.
+- [x] Update the guide with the exact Desktop/Terminus Sync extraction and future-update workflow.
+- [x] Package the modular full archive with the short root folder name frost-monero-regtest-escrow.
+- [x] Validate the short-name archive in a Desktop/Terminus Sync-style path and deliver its exact startup command.
+- [x] Send the exact short-name Desktop/Terminus Sync extract, launch, reset, and code-only update commands to the user.
+- [x] Replace the code/node_modules symlink layout with a mounted-filesystem-compatible root-level dependency installation.
+- [x] Validate coordinator startup and code-only replacement from a /mnt/Terminus Sync-style modular installation.
+- [x] Define an automatic, user-facing escrow-funding status flow that does not frame seller funding detection as manual verification.
+- [x] Define safe recovery-download boundaries that separate public audit evidence from private wallet or FROST secret material.
+- [x] Define a terminal-like live activity experience that updates without full-page reloads or user-initiated refreshes.
+- [x] Define dispute controls for mediator-signed payout to seller and mediator-signed refund to buyer.
+- [x] Define mockup boxes for buyer, seller, and mediator recovery material, including their distinct FROST or wallet custody boundaries.
+- [x] Use “FROST backup” terminology for role-specific secret material rather than a generic recovery package.
+- [x] Include a protected mediator FROST backup for CLI recovery and explain that it safeguards private DKG-derived signing material, not a public key alone.
+- [x] Design one unified per-role FROST backup artifact that abstracts DKG and signing-share complexity from users.
+- [x] Use compact upper-right Backup controls in buyer, seller, and mediator boxes, inspired by the referenced XMRBazaar layout.
+- [x] Design direct timestamped .frost downloads with no separate backup-management box.
+- [x] Use a red unavailable-to-green ready visual state for each upper-right FROST backup control.
+- [x] Make the full FROST backup button background red while unavailable and green when role-specific backup material is ready, with no separate dot indicator.
+- [x] Use the approved Option A strong signal colors: full red FROST backup buttons while unavailable and full green buttons when ready.
+- [x] Use equal neutral styling for mediator release/refund controls and require an explicit outcome-specific confirmation dialog before signing begins.
+- [x] Replace the clinical FROST backup disclosure with concise user-friendly, consequence-led warning copy.
+- [x] Use XMRBazaar-style backup wording while accurately referring to a FROST file rather than a mnemonic and avoiding a false browser-only custody claim.
+- [x] Replace the current slogan with the neutral title “FROST 3-of-5 Monero Escrow Demo.”
+- [x] Decide whether to keep accurate local-coordinator backup wording or redesign backup creation for true browser-only custody before using a browser-only claim.
+- [x] Use the user-approved XMRBazaar-style FROST backup copy as demo-facing language.
+- [x] Use the concise title “FROST 3-of-5 Monero Escrow Demo.”
+- [x] Add an automatic escrow-funding status ladder and move force-rescan behavior into an advanced troubleshooting control.
+- [x] Add real buyer-plus-mediator refund signing alongside the existing seller-plus-mediator release workflow.
+- [x] Add role-specific direct timestamped .frost download routes and red-to-green FROST backup readiness buttons.
+- [x] Add a concise mediator DKG-key custody explanation and neutral confirmed mediator ruling controls.
+- [x] Replace page-refresh activity behavior with an in-place live newest-first terminal that supports pause and jump-to-newest.
+- [x] Add tests for automated funding status, refund threshold signing, backup routes/readiness, confirmation controls, and live-terminal stream behavior.
+- [x] Verify each user-facing .frost artifact is generated only as a direct browser download and is never persisted as a coordinator-side backup file or included in audit output.
+- [x] Stream or poll workflow-state changes so controls, cards, and funding status update in place without requiring a browser refresh.
+- [x] Move the live protocol terminal into the central buyer/seller layout to use the available primary-screen space.
+- [x] Integrate the user-supplied frost-themed Monero artwork as a restrained, readable page background treatment.
+- [x] Add regression coverage and package a new modular archive for live workflow updates and the revised visual layout.
+- [x] Move the approved FROST backup warning above all workflow cards while retaining its user-approved wording.
+- [x] Remove the "Newest event first" phrase from the live protocol terminal header without changing newest-first event ordering.
+- [x] Replace the unilateral-looking happy-path payout control with explicit buyer-and-seller coordinated settlement consent for release to seller or refund to buyer.
+- [x] Ensure coordinated settlement controls only trigger the existing real buyer-plus-seller FROST threshold signing after both role consents are recorded, while preserving mediator-only dispute controls.
+- [x] Add regression coverage, browser validation, and a modular release archive for the corrected threshold-settlement UX.
+- [x] Review the provided Bazaar protocol guidance and reconcile every visible UI step with the actual local FROST coordinator behavior.
+- [x] Design a terminal-led protocol timeline that makes consent, preprocessing, signing, broadcast, and confirmation stages visibly correspond to the real workflow.
+- [x] Design an explicit unavailable-party recovery path where the mediator coordinates with the remaining buyer or seller using the real 2-plus-1 threshold option.
+- [x] Present the end-to-end protocol and UI flow for approval before making additional implementation changes.
+- [x] Audit why buyer and seller FROST preprocessing, signature-share generation, aggregation, and broadcast are currently executed inside the coordinator instead of role-isolated signer processes.
+- [x] Determine the exact role-process interfaces and persisted public protocol state required to use isolated buyer, seller, and mediator signers without moving their private FROST material through the coordinator.
+- [x] Present evidence for the current boundary and a production-faithful conversion plan before implementation.
+- [x] Draft and present an approval-ready role-host message contract, state diagram, protocol-terminal mapping, and incremental implementation sequence without changing signer code.
+- [x] Map every real FROST and wallet operation to a role-specific explicit button or visible automatic relay step, with no hidden coordinator signing shortcut.
+- [x] Define a button-driven buyer, seller, and mediator protocol flow that retains private material in the appropriate isolated host and exposes real preprocess, sign, complete, broadcast, timeout, and reset transitions.
+- [x] Present the explicit-action FROST workflow for approval before implementation.
+- [x] Compare browser-local FROST role-host operation with the XMRBazaar multisig interaction model and identify the minimum necessary user approvals.
+- [x] Present a trimmed, truthful workflow in which non-decisional role-local FROST operations relay automatically with visible terminal evidence.
+- [x] Define and present a Bazaar-level four-stage control surface for the role-isolated 3-of-5 FROST flow, including recovery actions without exposing unnecessary low-level buttons.
+- [x] Present the mediator as a normal escrow participant whose availability is only required for disagreement, timeout, or signer-recovery paths—not for preparation, deposit, or agreed buyer/seller payout.
+- [x] Define durable role-host, role-private storage, relay-message, and payout-round contracts for the implementation.
+- [x] Move buyer and seller FROST setup, threshold-key derivation, preprocessing, signing, completion, and broadcast out of the coordinator into isolated role hosts.
+- [x] Implement the Bazaar-level four-stage workflow with only meaningful role controls and terminal-backed automatic relay mechanics.
+- [x] Implement agreement, disagreement, timeout, recovery signer selection, and Reset signers behavior using real isolated-role FROST rounds.
+- [x] Add and run regression and end-to-end tests proving coordinator absence from role-private key operations and validating happy and recovery paths.
+- [x] Package and deliver a modular replacement release with the verified role-isolated workflow.
+- [x] Restyle the central live protocol panel as a clearly terminal-like Kali-inspired console while retaining real role-host events, newest-first ordering, pause, and in-place refresh behavior.
+- [x] Validate the terminal treatment visually and through regression coverage, then package the refined modular release.
+- [x] Remove the faux desktop-window chrome from the center panel and render it as a plain, full-height terminal console with no colored window dots or rounded application frame.
+- [x] Validate and package the stripped-back terminal refinement.
+- [x] Choose a secure random escrow amount between 0.5 and 10 XMR for each new local session, then persist the exact atomic value before payment.
+- [x] Pass the persisted selected amount to the buyer role host and display it in the buyer card, terminal, technical details, and audit export.
+- [x] Add bounded-random-amount regression coverage and package the updated modular release.
+- [x] Review XMRBazaar-style escrow fee behavior and the current 3-of-5 role-isolated settlement paths.
+- [x] Compare always-on, recovery-only, and separately funded mediator-fee models against the requirement that normal buyer/seller settlement needs no mediator presence.
+- [x] Present a recommended 1% mediator-fee policy and future transaction-construction approach for approval before implementation.
+- [x] Remove the non-live session-age and last-protocol-event display pills from the primary workflow.
+- [x] Add a clear Verify on fakechain control that exposes transaction ID, observed block height, and raw local `get_transactions` daemon evidence without relying on terminal text.
+- [x] Simplify normal and recovery decision controls so only contextually legal options appear and each selected path shows its real signer set before authorisation.
+- [x] Add regression and live verification for the evidence view and refreshed streamlined controls, then package the refined release.
+- [x] Implement the approved 1% mediator fee as a separate settlement output to the registered mediator payout address, deducted from the destination amount with network fees absorbed by the mediator output.
+- [x] Inspect GitHub integration availability and defer repository connection until the user returns with a target repository and authorisation.
+- [x] Share a current completed-settlement UI screenshot showing the 1% mediator-fee split and fakechain verification controls.
+- [x] Diagnose the reported settlement refusal where spendable escrow inputs do not equal the persisted per-session escrow amount.
+- [x] Isolate or clear stale role-host scan and escrow-input state on a new/reset session, and add a regression test plus exact recovery instructions.
+- [x] Audit every visible normal and recovery control against the actual isolated role-host FROST protocol and remove actions that duplicate a final decision or signature prerequisite.
+- [x] Combine mediator recovery ruling with its final approval, retain only the selected counterparty’s required signing action, and remove the duplicate terminal cursor.
+- [x] Replace the green frost palette with a Monero-aligned orange, white, and near-black visual system across the dashboard, terminal, status states, and evidence links.
+- [x] Validate contrast and desktop/mobile rendering of the Monero palette, then package the updated modular release.
+- [x] Restore the supplied Monerochan artwork as a clearly visible right-side background element without replacing or obscuring it.
+- [x] Validate artwork visibility and foreground contrast on desktop and mobile, then package the corrected modular release.
+- [x] Review the uploaded local-demo recording against the agreed FROST protocol, evidence, fee, recovery, and UI specification checklist; report observed alignment and deviations.
+- [x] Subdue the retained Monerochan artwork so it blends into the background without competing with foreground controls or evidence.
+- [x] Replace the normal buyer/seller decision-plus-authorisation sequence with one final outcome-specific signing action per required role, then automatically run the real four-share FROST round.
+- [x] Validate the streamlined normal settlement, contrast treatment, and modular release.
+- [x] Populate completed-session public details from persisted session and protocol records so escrow address, group key, mediator payout address, and all five public DKG keys remain visible after settlement.
+- [x] Log the derived escrow address and print both buyer and seller returned group-key values so their equality is independently observable.
+- [x] Make immediate disagreement, independent timeout, and stalled-round recovery eligibility explicit in code, durable protocol logs, and visible recovery controls.
+- [x] Validate completed happy and recovery views plus recovery-trigger evidence, then package the auditable modular release.
+- [x] Render funding and payout lifecycle from the daemon evidence: broadcast in transaction pool while `in_pool` is true, and confirmed at the observed block height only once present.
+- [x] Refresh persisted transaction evidence for both funding and payout, validate the in-pool-to-confirmed transition, and package the corrected modular release.
+- [x] Include the lower public protocol and transaction details panel in in-place live state updates without resetting the terminal view or scroll position.
+- [x] Add regression coverage, validate a live lower-panel state update, and package the corrected modular release.
+- [x] Move settlement network-fee allocation from the mediator output to the seller/recipient output while retaining a clean fixed 1% mediator output.
+- [x] Update fee disclosures, audit evidence, tests, and modular release validation for the seller-paid network-fee policy.
+- [x] Remove the credential-bearing project configuration and audit all tracked files for database, Cloudflare artifact, password, and token patterns.
+- [x] Remove unused Drizzle, MySQL, tRPC, OAuth, React placeholder, and template-server scaffolding while preserving the Bun/SQLite local demo and test commands.
+- [x] Harden `.gitignore` against local secrets, SQLite state, role-host material, session caches, fakechain data, and runtime logs.
+- [x] Rewrite the README for a public, unaudited agent-assisted local regtest demo, including setup, snapshot reset, vendored API workaround, payout-wallet decoy retry, and dispute flow.
+- [x] Validate the cleaned repository, report secret-scan findings, and package a public GitHub-ready modular release.
+- [x] Inspect the upstream monero-wallet-api repository and compare its tracked content with the inherited credential-bearing project configuration.
+- [x] Determine whether evidence supports a responsible upstream disclosure, then obtain approval before any external warning or issue submission.
+- [x] Trace the removed credential-bearing project configuration through retained project metadata, repository history, remote references, and session evidence without disclosing secret values.
+- [x] Report only confirmed provenance facts, remaining uncertainty, and required credential-safety actions.
+- [x] Create the approved public GitHub repository named “Monero FROST escrow regtest demo” from the cleaned source tree.
+- [x] Verify the published repository’s visibility, contents, and absence of removed credential configuration or runtime state.
+- [ ] Add explicit SoulReaver-SS and Manus AI collaboration credit to the public README and synchronize it to GitHub.
+- [ ] Replace the new public repository history with one cleaned commit authored by SoulReaver-SS and co-authored by Manus AI.
+- [ ] Force-push the approved joint-attribution history and verify public visibility, attribution, and cleaned-tree hygiene.

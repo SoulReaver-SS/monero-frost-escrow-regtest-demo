@@ -1,0 +1,25 @@
+{
+  "name": "frost-monero-regtest-escrow",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Unaudited local 3-of-5 FROST Monero escrow demonstration on a loopback fakechain.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "pnpm check && pnpm test",
+    "format": "prettier --write .",
+    "demo": "./scripts/run-local-demo.sh",
+    "demo:reset": "./scripts/run-local-demo.sh --reset",
+    "vendor:wallet-api": "./scripts/vendor-wallet-api.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "bun-types": "^1.3.14",
+    "prettier": "^3.6.2",
+    "typescript": "5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "packageManager": "pnpm@10.4.1"
+}
