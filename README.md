@@ -6,9 +6,14 @@ This is an **unaudited, agent-assisted, local-only demonstration** of a 3-of-5 F
 
 The local UI is served at `http://127.0.0.1:3901`. It is deliberately not a cloud application and must not be deployed as a static site.
 
-## Collaboration
+## Recorded demonstrations
 
-This demonstration was developed collaboratively by **[SoulReaver-SS](https://github.com/SoulReaver-SS)** and **Manus AI**. SoulReaver-SS directed the protocol, evidence, safety, usability, and presentation requirements; Manus AI assisted with implementation, validation, documentation, and repository preparation.
+These screen recordings show real local fakechain runs of the demonstration. The first recording is the normal buyer-and-seller settlement; the second shows the mediator-enabled escrow recovery path.
+
+| Order | Recording | What it shows |
+|---|---|---|
+| 1 | [Happy-path buyer/seller settlement](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-settlement.mp4) | Shared-address setup, funding, automatic detection, and buyer-plus-seller settlement while the mediator remains absent. |
+| 2 | [Escrow recovery with mediator](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator.mp4) | Shared-address setup, funding, disagreement, and mediator-enabled recovery settlement. |
 
 ## What the demo shows
 
