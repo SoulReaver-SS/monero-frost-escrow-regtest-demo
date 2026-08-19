@@ -1,4 +1,4 @@
-# FROST 3-of-5 Monero Regtest Escrow Demo
+# FROST 3-of-5 Monero Escrow Regtest Demo
 
 This is an **unaudited, agent-assisted, local-only demonstration** of a 3-of-5 FROST Monero escrow workflow. It uses a loopback-only Monero fakechain/regtest daemon, real wallet-library FROST operations, isolated buyer/seller signer hosts, a delayed mediator signer for recovery, and local Bun SQLite persistence.
 
