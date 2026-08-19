@@ -13,7 +13,7 @@ These are full-resolution screen recordings of real local fakechain runs. Select
 ### 1. Happy-path buyer/seller settlement
 
 <a href="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-settlement.mp4">
-  <img src="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-poster.jpg" alt="Happy-path buyer and seller FROST settlement recording" width="100%">
+  <img src="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-poster.webp" alt="Happy-path buyer and seller FROST settlement recording" width="100%">
 </a>
 
 Buyer and seller establish the shared address, fund it, detect funding, and complete a four-share settlement while the mediator stays absent. [Open the original-quality MP4 (135 MB)](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-settlement.mp4).
@@ -21,7 +21,7 @@ Buyer and seller establish the shared address, fund it, detect funding, and comp
 ### 2. Escrow recovery with mediator
 
 <a href="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator.mp4">
-  <img src="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator-poster.jpg" alt="Escrow recovery with mediator FROST settlement recording" width="100%">
+  <img src="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator-poster.webp" alt="Escrow recovery with mediator FROST settlement recording" width="100%">
 </a>
 
 The shared address is funded, disagreement makes recovery eligible, and the mediator joins the selected counterparty for the three-share recovery settlement. [Open the original-quality MP4 (190 MB)](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator.mp4).
