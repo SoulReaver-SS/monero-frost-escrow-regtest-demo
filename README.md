@@ -2,7 +2,7 @@
 
 This is an **unaudited, agent-assisted, local-only demonstration** of a 3-of-5 FROST Monero escrow workflow. It uses a loopback-only Monero fakechain/regtest daemon, real wallet-library FROST operations, isolated buyer/seller signer hosts, a delayed mediator signer for recovery, and local Bun SQLite persistence.
 
-> **Do not use this software, its wallets, FROST files, private keys, or recovery procedure with real funds.** It is an educational demo, not a security audit, production escrow service, or legal escrow arrangement.
+> **Do not use this software, its wallets, FROST files, private keys, or recovery procedure with real funds.** It is a demo, not a production escrow service, or legal escrow arrangement.
 
 > **This repository was implemented by Manus AI under the direction of SoulReaver-SS, who acted as the project and creative director.**
 
