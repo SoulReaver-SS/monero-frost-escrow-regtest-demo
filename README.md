@@ -8,12 +8,23 @@ The local UI is served at `http://127.0.0.1:3901`. It is deliberately not a clou
 
 ## Recorded demonstrations
 
-These screen recordings show real local fakechain runs of the demonstration. The first recording is the normal buyer-and-seller settlement; the second shows the mediator-enabled escrow recovery path.
+These are full-resolution screen recordings of real local fakechain runs. Select a poster to play or download the original-quality recording from the public release.
 
-| Order | Recording | What it shows |
-|---|---|---|
-| 1 | [Happy-path buyer/seller settlement](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-settlement.mp4) | Shared-address setup, funding, automatic detection, and buyer-plus-seller settlement while the mediator remains absent. |
-| 2 | [Escrow recovery with mediator](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator.mp4) | Shared-address setup, funding, disagreement, and mediator-enabled recovery settlement. |
+### 1. Happy-path buyer/seller settlement
+
+<a href="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-settlement.mp4">
+  <img src="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-poster.jpg" alt="Happy-path buyer and seller FROST settlement recording" width="100%">
+</a>
+
+Buyer and seller establish the shared address, fund it, detect funding, and complete a four-share settlement while the mediator stays absent. [Open the original-quality MP4 (135 MB)](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/happy-path-buyer-seller-settlement.mp4).
+
+### 2. Escrow recovery with mediator
+
+<a href="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator.mp4">
+  <img src="https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator-poster.jpg" alt="Escrow recovery with mediator FROST settlement recording" width="100%">
+</a>
+
+The shared address is funded, disagreement makes recovery eligible, and the mediator joins the selected counterparty for the three-share recovery settlement. [Open the original-quality MP4 (190 MB)](https://github.com/SoulReaver-SS/monero-frost-escrow-regtest-demo/releases/download/demo-recordings/escrow-recovery-with-mediator.mp4).
 
 ## What the demo shows
 
