@@ -216,7 +216,7 @@ This note records **only decisions for which a genuine alternative was discussed
 
 **What we picked.** Option 3.
 
-**Why.** A ruling is itself the mediator’s final consent. The selected counterpart supplies the other share set, reaching 3-of-5. Immediate disagreement does not wait for timeout; logs and UI show which eligibility condition fired.
+**Why.** A ruling is itself the mediator’s final consent. The selected counterpart supplies the other share set, reaching 3-of-5. Immediate disagreement does not wait for timeout; logs and UI show which eligibility condition fired. The default timeout is 7 days, matching the Bazaar model, and is configurable through the `FROST_RECOVERY_TIMEOUT_MS` environment variable.
 
 ### 16. How should backups be presented to the user?
 
