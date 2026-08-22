@@ -160,6 +160,8 @@ test -f vendor/monero-wallet-api/dist/api.js || pnpm vendor:wallet-api
 
 The helper downloads `@spirobel/monero-wallet-api` with lifecycle scripts disabled and copies only its prebuilt distribution. Review the package version in `vendor/monero-wallet-api/VERSION` before changing it.
 
+**Upstream FROST work:** This demo uses [`@spirobel/monero-wallet-api`](https://github.com/monerochan-ecosystem/monero-wallet-api), maintained by [Spirobel](https://github.com/spirobel). Its FROST escrow/arbitrator model is informed by Spirobel’s article, [*Robust Monero Escrow with offline Arbitrators*](https://monerochan.news/article/19). This repository is an independent local regtest demo, not an upstream release or endorsement.
+
 ## Regtest decoys and tests
 
 `decoyRetry = true` must be set on **both** the buyer funding wallet and the escrow payout wallet. Setting it only on the wallet that funds escrow does not fix a payout construction failure; the role-host payout wallet also sets it before creating the two-output settlement.
