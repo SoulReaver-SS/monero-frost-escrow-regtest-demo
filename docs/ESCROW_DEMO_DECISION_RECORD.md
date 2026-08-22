@@ -287,3 +287,15 @@ This note records **only decisions for which a genuine alternative was discussed
 **What we picked.** Option 3.
 
 **Why.** The result is recognizably Monero-oriented without letting the art compete with controls, addresses, or audit information. The terminal reads as a terminal rather than polished decorative chrome, which better supports the demo’s inspectability goal.
+
+## C. Corrections Made After Observing Live Runs
+
+**Payout completion versus actual confirmation.** The first completion view called a payout complete immediately after broadcast, even while the audit and daemon evidence still reported `in_pool: true` and no observed block height. This surfaced when the completed UI was compared directly with the session audit. The display was changed to show **broadcast, in tx pool** until `get_transactions` supplies a height, then **confirmed at height N**; funding uses the same evidence-driven lifecycle.
+
+**Missing payout-wallet decoy retry.** An early real settlement reached transaction construction but failed with the known regtest decoy-construction problem because `decoyRetry` had been applied to the funding side rather than the escrow wallet constructing the payout. This surfaced in the real role-host wallet output, not in a static UI check. The payout/escrow wallet was configured with `decoyRetry`, and the setup path retained the required pre-mined fakechain depth before constructing transactions.
+
+**Completed recovery details rendered as dashes.** A finished dispute session displayed dashes for the escrow address, group key, mediator payout address, and public DKG keys even though those values existed in durable state and had rendered earlier in the funded session. This surfaced on the actual completed recovery screen. The coordinator now stores a public setup snapshot at setup and completion, and the page/audit use that persisted snapshot as their completed-session fallback.
+
+**BigInt serialization failure in the happy path.** A live happy-path run emitted `JSON.stringify cannot serialize BigInt` between payment and signing, creating a risk that a protocol record or event could fail to persist. This surfaced in the displayed protocol log during the real flow. Serialization was changed to use a BigInt replacer that preserves the values in a serializable form, and the contract suite checks that the conversion does not silently discard state.
+
+**Redundant authorization layers.** The first interactive versions added extra approval controls after an already-final buyer/seller consent and after a mediator ruling. Seeing the live controls made the duplication clear: it implied an additional cryptographic or authority requirement that did not exist. The normal path now starts the FROST round as soon as matching buyer and seller final consents exist; a mediator ruling is itself final, leaving only the selected buyer or seller’s required co-sign action for recovery.
