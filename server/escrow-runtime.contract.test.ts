@@ -18,6 +18,7 @@ const modularLauncher = readFileSync(join(projectRoot, "scripts", "modular-demo.
 const modularReplace = readFileSync(join(projectRoot, "scripts", "replace-code-dir.sh"), "utf8");
 const readme = readFileSync(join(projectRoot, "README.md"), "utf8");
 const gitignore = readFileSync(join(projectRoot, ".gitignore"), "utf8");
+const manifest = JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")) as { dependencies?: Record<string, string> };
 
 function resolveBunExecutable(): string {
   const home = process.env.HOME ?? "";
@@ -38,6 +39,7 @@ describe("isolated local FROST escrow runtime contract", () => {
     expect(readme).toContain("vendor/monero-wallet-api/dist/api.js");
     expect(readme).toContain("To demonstrate a dispute");
     expect(bootstrapScript).toContain("Restarting the restored loopback fakechain daemon");
+    expect(manifest.dependencies).toMatchObject({ "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0" });
   });
 
   it("uses the requested five-share, three-threshold allocation", () => {

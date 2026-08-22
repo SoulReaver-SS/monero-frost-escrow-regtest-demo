@@ -223,6 +223,8 @@
 - [x] Report only confirmed provenance facts, remaining uncertainty, and required credential-safety actions.
 - [x] Create the approved public GitHub repository named “Monero FROST escrow regtest demo” from the cleaned source tree.
 - [x] Verify the published repository’s visibility, contents, and absence of removed credential configuration or runtime state.
-- [ ] Add explicit SoulReaver-SS and Manus AI collaboration credit to the public README and synchronize it to GitHub.
-- [ ] Replace the new public repository history with one cleaned commit authored by SoulReaver-SS and co-authored by Manus AI.
-- [ ] Force-push the approved joint-attribution history and verify public visibility, attribution, and cleaned-tree hygiene.
+- [x] Add explicit SoulReaver-SS and Manus AI collaboration credit to the public README and synchronize it to GitHub.
+- [x] Replace the new public repository history with one cleaned commit authored by SoulReaver-SS and co-authored by Manus AI.
+- [x] Force-push the approved joint-attribution history and verify public visibility, attribution, and cleaned-tree hygiene.
+- [x] Fresh-clone the public repository, install with the lockfile, build, and start the loopback coordinator before releasing a runtime update.
+- [x] Declare the Noble runtime packages required by the vendored wallet API and lock them as direct production dependencies.
